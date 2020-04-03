@@ -480,7 +480,6 @@ Vue.component('animation', {
                                 for (var i = 0; i < this.fpa; i++) {
                                     frame_list.push(Math.trunc(((i + 1) * frames_cnt / this.fpa) - 1));
                                 }
-                                console.log(frame_list);
                                 this.interval = this.start(this, frame_list);
                             }
                         }
