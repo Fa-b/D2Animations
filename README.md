@@ -4,7 +4,9 @@ allows you to extract various d2 graphic files and save them as images/animation
 This is a pure js solution, simply drop your files into the rectangle and wait until all is parsed.
 Then you can (should be able to) recolor images and animations.
 
-<b>Note that you must provide at least a palette to see images and animations ;).</b>
+None of the files will be uploaded anywhere! It's all hapening on your PC.
+
+<b><h3>Note:</h3> that you must provide at least a palette to see images and animations ;).</b>
 
 # Comments
 I don't know much about the use cases, have been asked to do smt. for animations. If you need additional features, feel free to ask for them.
