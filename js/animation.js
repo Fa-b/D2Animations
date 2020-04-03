@@ -462,7 +462,6 @@ Vue.component('animation', {
                             fpa: frames_cnt,
                             activeFrame: 0,
                             start: (self, frame_list) => {
-								console.log(frame_list);
                                 var position = 0;
                                 return setInterval(() => {
                                     if(position >= frame_list.length)
