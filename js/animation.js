@@ -84,7 +84,7 @@ Vue.component('animation', {
                 bit[]               PixelValuesKey[256]
                 
          */
-        return { raw: [], fileheader: [], directionpointer: [], directionheader: [], directionbox: [], frameheader: [], framebox: [], dataheader: [], bitstream: [], frame_buffer: [], cell_buffer: [], pixelData: [], spriteData: [], imageData: [], palettes: palettes, compositions: compositions, directions: [] }
+        return { raw: [], fileheader: [], directionpointer: [], directionheader: [], directionbox: [], frameheader: [], framebox: [], dataheader: [], bitstream: [], frame_buffer: [], cell_buffer: [], pixelData: [], spriteData: [], palettes: palettes, compositions: compositions, directions: [] }
     },
     methods: {
         str2DWORD: function(str) {
@@ -379,30 +379,30 @@ Vue.component('animation', {
             if(e) {
                 var mapData = JSON.parse(e.target.value);
                 //var mapData = JSON.parse(data.map);
-
-                this.imageData = [];
+                
+                var imageData = [];
                 
                 var canvas = document.createElement('canvas');
                 var maxFramewidth = 0;
                 var maxFrameheight = 0;
                 for (var x = 0; x < this.fileheader[2]; x++) {
                     // Each direction
-                    this.imageData.push([]);
+                    imageData.push([]);
                     for (var y = 0; y < this.fileheader[3]; y++) {
                         // Each Frame
-                        this.imageData[x].push([]);
-                        this.imageData[x][y] = document.createElement('canvas');
-                        this.imageData[x][y].width = this.spriteData[x][y].width;
-                         if(maxFramewidth < this.imageData[x][y].width)
-                            maxFramewidth = this.imageData[x][y].width;
-                        this.imageData[x][y].height = this.spriteData[x][y].height;
-                        if(maxFrameheight < this.imageData[x][y].height)
-                            maxFrameheight = this.imageData[x][y].height;
-                        var graphics = this.imageData[x][y].getContext('2d');
+                        imageData[x].push([]);
+                        imageData[x][y] = document.createElement('canvas');
+                        imageData[x][y].width = this.spriteData[x][y].width;
+                         if(maxFramewidth < imageData[x][y].width)
+                            maxFramewidth = imageData[x][y].width;
+                        imageData[x][y].height = this.spriteData[x][y].height;
+                        if(maxFrameheight < imageData[x][y].height)
+                            maxFrameheight = imageData[x][y].height;
+                        var graphics = imageData[x][y].getContext('2d');
                         var idx = 0;
                         var code = undefined;
                         var imgData = graphics.getImageData(0, 0, this.spriteData[x][y].width, this.spriteData[x][y].height);
-                        for (var row = 0; row < this.imageData[x][y].height; row++) {
+                        for (var row = 0; row < imageData[x][y].height; row++) {
                             for (var col = 0; col < this.spriteData[x][y].width; col++) {
                                 code = this.spriteData[x][y].data[row][col];
                                 if(code > 0) {
@@ -440,7 +440,7 @@ Vue.component('animation', {
                     var frames_cnt = this.fileheader[3];
                     
                     for (var col = 0; col < frames_cnt; col++) {
-                        graphics.drawImage(this.imageData[row][col], col * maxFramewidth, 0);
+                        graphics.drawImage(imageData[row][col], col * maxFramewidth, 0);
                     }
 
                     this.directions.push({
@@ -489,6 +489,8 @@ Vue.component('animation', {
                         direction.animation.restart(frames_cnt);
                     });
                 }     
+                
+                imageData = null;
             }
         }
     },
@@ -803,14 +805,21 @@ Vue.component('animation', {
             console.log("Finished Direction:", x);
         }
         
-        console.log("File Header:",this.fileheader);
-        console.log("Direction Pointer:",this.directionpointer);
-        console.log("Direction Header:",this.directionheader, "Direction Cells:", this.directionbox);
-        console.log("Frame Header:",this.frameheader, "Frame Cells:", this.framebox);
-        console.log("Data Header", this.dataheader);
-        console.log("Bitstream", this.bitstream);
+        // console.log("File Header:",this.fileheader);
+        // console.log("Direction Pointer:",this.directionpointer);
+        // console.log("Direction Header:",this.directionheader, "Direction Cells:", this.directionbox);
+        // console.log("Frame Header:",this.frameheader, "Frame Cells:", this.framebox);
+        // console.log("Data Header", this.dataheader);
+        // console.log("Bitstream", this.bitstream);
         
-        console.log("\nFinished:",this.spriteData);
+        //console.log("\nFinished:",this.spriteData);
+        
+        this.directionbox = null;//[];
+        this.framebox = null;//[];
+        this.bitstream = null;//[];
+        this.frame_buffer = null;//[];
+        this.cell_buffer = null;//[];
+        this.pixelData = null;//[];
         
         if(this.palettes[0])
             this.selectComposition({target:{value:this.palettes[0].map, name:this.palettes[0].name}});
