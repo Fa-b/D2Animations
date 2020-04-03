@@ -447,7 +447,7 @@ Vue.component('animation', {
                         image: {
                             src: anim.toDataURL(),
                             style: {
-                                'max-width': windowWidth
+                                'max-width': windowWidth + "px"
                             },
                             id: "png_" + row
                         },
