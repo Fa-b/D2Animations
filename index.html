@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+
+<html dir="ltr" lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>D2 Animations</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+        <link rel="stylesheet" href="css/style.css">
+        <script src="https://code.jquery.com/jquery-2.2.4.min.js"></script>
+        <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+	</head>
+
+	<body>
+        <div id="root" class="container">
+            <nav class="nav nav-tabs" id="app-tab" role="tablist">
+                <a class="nav-item nav-link active" id="file-tab" data-toggle="tab" href="#fileapp" role="tab" aria-controls="fileapp" aria-selected="true">Select Files</a>
+				<a class="nav-item nav-link" id="palette-tab" data-toggle="tab" href="#paletteapp" role="tab" aria-controls="paletteapp" aria-selected="true">Palettes</a>
+				<a class="nav-item nav-link" id="map-tab" data-toggle="tab" href="#mapapp" role="tab" aria-controls="mapapp" aria-selected="true">Color Maps</a>
+                <a class="nav-item nav-link" id="map-tab" data-toggle="tab" href="#spriteapp" role="tab" aria-controls="spriteapp" aria-selected="true">Sprite Sheets</a>
+                <a class="nav-item nav-link" id="map-tab" data-toggle="tab" href="#animationapp" role="tab" aria-controls="animationapp" aria-selected="true">Animations</a>
+			</nav>
+            <div class="tab-content bg-white" id="tab-content" ng-controller="FileLoadController as fileLoader">
+				<div id="fileapp" class="tab-pane fade show active" role="tabpanel" aria-labelledby="file-tab">
+					<h1 align=center>Select any file(s) to mod</h1>
+                    <div id="filedrop">Drop file(s) here...</div>
+                    <div id="filestatus"></div>
+                    <div id="filelist"></div>
+				</div>
+				<div id="paletteapp" class="tab-pane fade show" role="tabpanel" aria-labelledby="palette-tab">
+					<h1 align=center>Palettes</h1>
+                    <palette v-for="item in pal_files" v-bind:file="item" v-bind:key="item.id" track-by="item.hash" v-on:remove-palette="removePalette"></palette>
+				</div>
+                <div id="mapapp" class="tab-pane fade show" role="tabpanel" aria-labelledby="map-tab">
+					<h1 align=center>Color Maps</h1>
+                    <color-map v-for="item in map_files" v-bind:file="item" v-bind:key="item.id" track-by="item.hash" v-on:remove-map="removeMap"></color-map>
+				</div>
+                <div id="spriteapp" class="tab-pane fade show" role="tabpanel" aria-labelledby="sprite-tab">
+					<h1 align=center>Sprite Sheets</h1>
+                    <sprite-sheet v-for="item in dc6_files" v-bind:file="item" v-bind:key="item.id" track-by="item.hash" v-on:remove-sprite="removeSprite"></sprite-sheet>
+				</div>
+                <div id="animationapp" class="tab-pane fade show" role="tabpanel" aria-labelledby="animation-tab">
+					<h1 align=center>Animations</h1>
+                    <animation v-for="item in dcc_files" v-bind:file="item" v-bind:key="item.id" track-by="item.hash" v-on:remove-sprite="removeAnimation"></animation>
+				</div>
+			</div>
+        </div>
+	</body>
+    <script src="./js/index.js"></script>
+    <script src="./js/file.js"></script>
+    <script src="./js/grid.js"></script>
+    <script src="./js/palette.js"></script>
+    <script src="./js/color-map.js"></script>
+    <script src="./js/sprite-sheet.js"></script>
+    <script src="./js/animation.js"></script>
+</html>
