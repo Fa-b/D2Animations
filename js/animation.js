@@ -462,6 +462,7 @@ Vue.component('animation', {
                             fpa: frames_cnt,
                             activeFrame: 0,
                             start: (self, frame_list) => {
+								console.log(frame_list);
                                 var position = 0;
                                 return setInterval(() => {
                                     if(position >= frame_list.length)
@@ -478,8 +479,9 @@ Vue.component('animation', {
                                 clearInterval(this.interval);
                                 var frame_list = [];
                                 for (var i = 0; i < this.fpa; i++) {
-                                    frame_list.push(Math.trunc(((i + 1) * frames_cnt / this.fpa) - 1));
+                                    frame_list.push(Math.trunc((i * frames_cnt / (this.fpa - 1))));
                                 }
+								frame_list[frame_list.length - 1]--;
                                 this.interval = this.start(this, frame_list);
                             }
                         }
