@@ -15,12 +15,13 @@ Vue.component('animation', {
     props: ['file'],
     template: `
     <div class="blog-post">
-        <h2>{{ file.name }}</h2>
+        <h2>{{file.name}}</h2>
         <select v-on:change="selectComposition">
-            <option v-for="palette in palettes" v-bind:value="palette.map" v-bind:key="palette.id" v-bind:name="palette.name">
+            <!--<option disabled selected value> -- select palette -- </option>-->
+            <option v-for="(palette, index) in palettes" v-bind:value="palette.map" v-bind:key="palette.key" v-bind:name="palette.name">
                 {{ palette.name }}
             </option>
-            <option v-for="palette in compositions" v-bind:value="palette.map" v-bind:key="palette.id" v-bind:name="palette.name">
+            <option v-for="(palette, index) in compositions" v-bind:value="palette.map" v-bind:key="palette.key" v-bind:name="palette.name">
                 {{ palette.name }}
             </option>
         </select>
@@ -496,340 +497,352 @@ Vue.component('animation', {
         }
     },
     mounted() {
-        var rawLength = this.file.data.length;
-        this.raw = [];
-        var idx = 0;
-        var ptr = {
-                cur_byte: idx,
-                cur_bit: 0
-            };
-        
-        // File Header: signature, version, directions, frames, unknown, file_size
-        this.fileheader.push(this.file.data.charCodeAt(idx++));
-        this.fileheader.push(this.file.data.charCodeAt(idx++));
-        this.fileheader.push(this.file.data.charCodeAt(idx++));
-        var filesize = 3;
-        for (var i = 0; i < filesize; i++) {
-            this.fileheader.push(this.str2DWORD(this.file.data.slice(idx,idx+=4)));
-        }
-        
-        filesize = this.fileheader[2];
-        for (var i = 0; i < filesize; i++) {
-            this.directionpointer.push(this.str2DWORD(this.file.data.slice(idx,idx+=4)));
-        }
-
-        // Direction Header: total_size, compression_flags, 0bits_sizecode, width_sizecode, height_sizecode, offset_x_sizecode, offset_y_sizecode, optional_bytes_sizecode, length_sizecode
-        for (var x = 0; x < this.fileheader[2]; x++) {
-            // Each direction
-            this.directionheader.push([]);
-            this.directionbox.push({
-                xmin: 2147483647,
-                xmax: -2147483648,
-                ymin: 2147483647,
-                ymax: -2147483648,
-                width: 0,
-                height: 0,
-                cells: []
-            });
-            this.frameheader.push([]);
-            this.framebox.push([]);
-            this.dataheader.push([0,0,0,0,[],0]);
-            this.bitstream.push([]);
-            this.spriteData.push([]);
-            this.raw.push([]);
-            if(this.directionpointer[x] != idx) {
-                console.warn(JSON.stringify(ptr));
-                console.warn("Something is wrong:", this.file.name,"Direction:",x,"Expected adress:",this.directionpointer[x],"Given:",idx);
-            }
-
-            ptr = {
-                cur_byte: this.directionpointer[x],
-                cur_bit: 0
-            };
-
-            this.directionheader[x].push(this.readBits(this.file.data, ptr, 32, false));
-            this.directionheader[x].push(this.readBits(this.file.data, ptr, 2, false));
-            this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
-            this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
-            this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
-            this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
-            this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
-            this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
-            this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
+        var threaded = JSThread.create(async () => {
+            var rawLength = this.file.data.length;
+            this.raw = [];
+            var idx = 0;
+            var ptr = {
+                    cur_byte: idx,
+                    cur_bit: 0
+                };
             
-            var optionalData = 0;
-            
-            // Frame Header: unused, width, height, offset_x, offset_y, optional_bytes, length, flip
-            for (var y = 0; y < this.fileheader[3]; y++) {
-                // Each Frame
-                this.frameheader[x].push([]);
-                this.raw[x].push([]);
-                
-                this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][2], false));
-                this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][3], false));
-                this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][4], false));
-                this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][5], true));
-                this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][6], true));
-                this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][7], false));
-                this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][8], false));
-                this.frameheader[x][y].push(this.readBits(this.file.data, ptr, 1, false));
-                
-                optionalData += this.frameheader[x][y][5];
-                
-                this.framebox[x].push(this.measureBox(  this.frameheader[x][y][1],
-                                                        this.frameheader[x][y][2],
-                                                        this.frameheader[x][y][3],
-                                                        this.frameheader[x][y][4],
-                                                        this.frameheader[x][y][7]));
-                
-                if (this.framebox[x][y].xmin < this.directionbox[x].xmin)
-                    this.directionbox[x].xmin = this.framebox[x][y].xmin;
-
-                if (this.framebox[x][y].ymin < this.directionbox[x].ymin)
-                    this.directionbox[x].ymin = this.framebox[x][y].ymin;
-
-                if (this.framebox[x][y].xmax > this.directionbox[x].xmax)
-                    this.directionbox[x].xmax = this.framebox[x][y].xmax;
-
-                if (this.framebox[x][y].ymax > this.directionbox[x].ymax)
-                    this.directionbox[x].ymax = this.framebox[x][y].ymax;
+            // File Header: signature, version, directions, frames, unknown, file_size
+            this.fileheader.push(this.file.data.charCodeAt(idx++));
+            this.fileheader.push(this.file.data.charCodeAt(idx++));
+            this.fileheader.push(this.file.data.charCodeAt(idx++));
+            var filesize = 3;
+            for (var i = 0; i < filesize; i++) {
+                this.fileheader.push(this.str2DWORD(this.file.data.slice(idx,idx+=4)));
             }
             
-            // When there is optional data we have to pad our stream up to the next byte boundary and apply an offset according to the sum of all optionalData bytes
-            if(optionalData > 0) {
-                if(ptr.cur_bit != 0) {
-                    ptr.cur_bit = 0;
-                    ptr.cur_byte += optionalData;
+            filesize = this.fileheader[2];
+            for (var i = 0; i < filesize; i++) {
+                this.directionpointer.push(this.str2DWORD(this.file.data.slice(idx,idx+=4)));
+            }
+
+            // Direction Header: total_size, compression_flags, 0bits_sizecode, width_sizecode, height_sizecode, offset_x_sizecode, offset_y_sizecode, optional_bytes_sizecode, length_sizecode
+            for (var x = 0; x < this.fileheader[2]; x++) {
+                // Each direction
+                this.directionheader.push([]);
+                this.directionbox.push({
+                    xmin: 2147483647,
+                    xmax: -2147483648,
+                    ymin: 2147483647,
+                    ymax: -2147483648,
+                    width: 0,
+                    height: 0,
+                    cells: []
+                });
+                this.frameheader.push([]);
+                this.framebox.push([]);
+                this.dataheader.push([0,0,0,0,[],0]);
+                this.bitstream.push([]);
+                this.spriteData.push([]);
+                this.raw.push([]);
+                if(this.directionpointer[x] != idx) {
+                    console.warn(JSON.stringify(ptr));
+                    console.warn("Something is wrong:", this.file.name,"Direction:",x,"Expected adress:",this.directionpointer[x],"Given:",idx);
                 }
-            }
-            
-            this.directionbox[x].width  = this.directionbox[x].xmax - this.directionbox[x].xmin + 1;
-            this.directionbox[x].height = this.directionbox[x].ymax - this.directionbox[x].ymin + 1;
-            
-            /** Start Prepare Direction Buffer Cell's **/
-            
-            var fract_width = Math.trunc((this.directionbox[x].width - 1) / 4);
-            var rest_width = this.directionbox[x].width % 4;   // if 0, append width 4 at end
-            var fract_height = Math.trunc((this.directionbox[x].height - 1) / 4);
-            var rest_height = this.directionbox[x].height % 4; // if 0, append height 4 at end
-            for (var i = 0; i < (fract_height + 1); i++) {
-                this.directionbox[x].cells.push([]);
-                for (var j = 0; j < fract_width; j++) {
+
+                ptr = {
+                    cur_byte: this.directionpointer[x],
+                    cur_bit: 0
+                };
+
+                this.directionheader[x].push(this.readBits(this.file.data, ptr, 32, false));
+                this.directionheader[x].push(this.readBits(this.file.data, ptr, 2, false));
+                this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
+                this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
+                this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
+                this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
+                this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
+                this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
+                this.directionheader[x].push(bit_codes[this.readBits(this.file.data, ptr, 4, false)]);
+                
+                var optionalData = 0;
+                
+                // Frame Header: unused, width, height, offset_x, offset_y, optional_bytes, length, flip
+                for (var y = 0; y < this.fileheader[3]; y++) {
+                    // Each Frame
+                    this.frameheader[x].push([]);
+                    this.raw[x].push([]);
+                    
+                    this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][2], false));
+                    this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][3], false));
+                    this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][4], false));
+                    this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][5], true));
+                    this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][6], true));
+                    this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][7], false));
+                    this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][8], false));
+                    this.frameheader[x][y].push(this.readBits(this.file.data, ptr, 1, false));
+                    
+                    optionalData += this.frameheader[x][y][5];
+                    
+                    this.framebox[x].push(this.measureBox(  this.frameheader[x][y][1],
+                                                            this.frameheader[x][y][2],
+                                                            this.frameheader[x][y][3],
+                                                            this.frameheader[x][y][4],
+                                                            this.frameheader[x][y][7]));
+                    
+                    if (this.framebox[x][y].xmin < this.directionbox[x].xmin)
+                        this.directionbox[x].xmin = this.framebox[x][y].xmin;
+
+                    if (this.framebox[x][y].ymin < this.directionbox[x].ymin)
+                        this.directionbox[x].ymin = this.framebox[x][y].ymin;
+
+                    if (this.framebox[x][y].xmax > this.directionbox[x].xmax)
+                        this.directionbox[x].xmax = this.framebox[x][y].xmax;
+
+                    if (this.framebox[x][y].ymax > this.directionbox[x].ymax)
+                        this.directionbox[x].ymax = this.framebox[x][y].ymax;
+                }
+                
+                // When there is optional data we have to pad our stream up to the next byte boundary and apply an offset according to the sum of all optionalData bytes
+                if(optionalData > 0) {
+                    if(ptr.cur_bit != 0) {
+                        ptr.cur_bit = 0;
+                        ptr.cur_byte += optionalData;
+                    }
+                }
+                
+                this.directionbox[x].width  = this.directionbox[x].xmax - this.directionbox[x].xmin + 1;
+                this.directionbox[x].height = this.directionbox[x].ymax - this.directionbox[x].ymin + 1;
+                
+                /** Start Prepare Direction Buffer Cell's **/
+                
+                var fract_width = Math.trunc((this.directionbox[x].width - 1) / 4);
+                var rest_width = this.directionbox[x].width % 4;   // if 0, append width 4 at end
+                var fract_height = Math.trunc((this.directionbox[x].height - 1) / 4);
+                var rest_height = this.directionbox[x].height % 4; // if 0, append height 4 at end
+                for (var i = 0; i < (fract_height + 1); i++) {
+                    this.directionbox[x].cells.push([]);
+                    for (var j = 0; j < fract_width; j++) {
+                        this.directionbox[x].cells[this.directionbox[x].cells.length-1].push({
+                            width: 4,
+                            height: (i==fract_height && rest_height)?rest_height:4,
+                            buffer: {
+                                width: 0,//4,
+                                height: 0,//(i==fract_height && rest_height)?rest_height:4,
+                                data: []
+                            }
+                        });
+                    }
                     this.directionbox[x].cells[this.directionbox[x].cells.length-1].push({
-                        width: 4,
+                        width: rest_width?rest_width:4,
                         height: (i==fract_height && rest_height)?rest_height:4,
                         buffer: {
-                            width: 0,//4,
-                            height: 0,//(i==fract_height && rest_height)?rest_height:4,
+                            width: 0,
+                            height: 0,
                             data: []
                         }
                     });
                 }
-                this.directionbox[x].cells[this.directionbox[x].cells.length-1].push({
-                    width: rest_width?rest_width:4,
-                    height: (i==fract_height && rest_height)?rest_height:4,
-                    buffer: {
-                        width: 0,
-                        height: 0,
-                        data: []
-                    }
-                });
-            }
-            
-            /** End Prepare Direction Buffer Cell's **/
-            
-            // Compression strategy: EqualCells, PixelMask, EncodingType, RawPixelCodes, PixelCodeAndDisplacement
-            if(this.directionheader[x][1] & 0x02) {
-                this.dataheader[x][0] = this.readBits(this.file.data, ptr, 20, false);
-            }
-            
-            this.dataheader[x][1] = this.readBits(this.file.data, ptr, 20, false);
-            
-            if(this.directionheader[x][1] & 0x01) {
-                this.dataheader[x][2] = this.readBits(this.file.data, ptr, 20, false);
-                this.dataheader[x][3] = this.readBits(this.file.data, ptr, 20, false);
-            }
-            
-            // PixelValuesKey
-            for (var i = 0; i < 256; i++) {
-                if(this.readBits(this.file.data, ptr, 1, false) != 0)
-                    this.dataheader[x][4].push(i);
-            }
-            
-            // EqualCells
-            this.bitstream[x].push([]);
-            this.bitstream[x][0] = {
-                stream: [],
-                idx: 0
-            };
-            for (var j = 0; j < (this.dataheader[x][0] / 1); j++) {
-                this.bitstream[x][0].stream.push(this.readBits(this.file.data, ptr, 1, false));
-            }
-            
-            // PixelMask
-            this.bitstream[x].push([]);
-            this.bitstream[x][1] = {
-                stream: [],
-                idx: 0
-            };
-            for (var j = 0; j < (this.dataheader[x][1] / 4); j++) {
-                this.bitstream[x][1].stream.push(this.readBits(this.file.data, ptr, 4, false));
-            }
-            
-            // EncodingType
-            this.bitstream[x].push([]);
-            this.bitstream[x][2] = {
-                stream: [],
-                idx: 0
-            };
-            for (var j = 0; j < (this.dataheader[x][2] / 1); j++) {
-                this.bitstream[x][2].stream.push(this.readBits(this.file.data, ptr, 1, false));
-            }
-              
-            // RawPixelCodes
-            this.bitstream[x].push([]);
-            this.bitstream[x][3] = {
-                stream: [],
-                idx: 0
-            };
-            for (var j = 0; j < (this.dataheader[x][3] / 8); j++) {
-                this.bitstream[x][3].stream.push(this.readBits(this.file.data, ptr, 8, false));
-            }
-
-            var dir_size;
-            if (x == (this.fileheader[2] - 1))
-                dir_size = 8 * (this.file.data.length - ptr.cur_byte) - ptr.cur_bit;
-            else
-                dir_size = 8 * (this.directionpointer[x + 1] - ptr.cur_byte) - ptr.cur_bit;
-            
-            this.dataheader[x][5] = dir_size;
-            
-            // PixelCodeAndDisplacement
-            this.bitstream[x].push([]);
-            this.bitstream[x][4] = {
-                stream: [],
-                idx: 0,
-                ptr: {
-                    cur_byte: ptr.cur_byte,
-                    cur_bit: ptr.cur_bit
+                
+                /** End Prepare Direction Buffer Cell's **/
+                
+                // Compression strategy: EqualCells, PixelMask, EncodingType, RawPixelCodes, PixelCodeAndDisplacement
+                if(this.directionheader[x][1] & 0x02) {
+                    this.dataheader[x][0] = this.readBits(this.file.data, ptr, 20, false);
                 }
-            };
+                
+                this.dataheader[x][1] = this.readBits(this.file.data, ptr, 20, false);
+                
+                if(this.directionheader[x][1] & 0x01) {
+                    this.dataheader[x][2] = this.readBits(this.file.data, ptr, 20, false);
+                    this.dataheader[x][3] = this.readBits(this.file.data, ptr, 20, false);
+                }
+                
+                // PixelValuesKey
+                for (var i = 0; i < 256; i++) {
+                    if(this.readBits(this.file.data, ptr, 1, false) != 0)
+                        this.dataheader[x][4].push(i);
+                }
+                
+                // EqualCells
+                this.bitstream[x].push([]);
+                this.bitstream[x][0] = {
+                    stream: [],
+                    idx: 0
+                };
+                for (var j = 0; j < (this.dataheader[x][0] / 1); j++) {
+                    this.bitstream[x][0].stream.push(this.readBits(this.file.data, ptr, 1, false));
+                }
+                
+                // PixelMask
+                this.bitstream[x].push([]);
+                this.bitstream[x][1] = {
+                    stream: [],
+                    idx: 0
+                };
+                for (var j = 0; j < (this.dataheader[x][1] / 4); j++) {
+                    this.bitstream[x][1].stream.push(this.readBits(this.file.data, ptr, 4, false));
+                }
+                
+                // EncodingType
+                this.bitstream[x].push([]);
+                this.bitstream[x][2] = {
+                    stream: [],
+                    idx: 0
+                };
+                for (var j = 0; j < (this.dataheader[x][2] / 1); j++) {
+                    this.bitstream[x][2].stream.push(this.readBits(this.file.data, ptr, 1, false));
+                }
+                  
+                // RawPixelCodes
+                this.bitstream[x].push([]);
+                this.bitstream[x][3] = {
+                    stream: [],
+                    idx: 0
+                };
+                for (var j = 0; j < (this.dataheader[x][3] / 8); j++) {
+                    this.bitstream[x][3].stream.push(this.readBits(this.file.data, ptr, 8, false));
+                }
 
-            for (var j = 0; j < (this.dataheader[x][5] / 4); j++) {
-                this.bitstream[x][4].stream.push(this.readBits(this.file.data, ptr, 4, false));
-            }
-            
-            this.pixelData = [];
-            this.cell_buffer = [];
-            
-            /** Start Prepare Frame Buffer Cell's **/
-            
-            for (var y = 0; y < this.fileheader[3]; y++) {              
-                var start_width = (4 - ((this.framebox[x][y].xmin - this.directionbox[x].xmin) % 4));
-                var start_height = (4 - ((this.framebox[x][y].ymin - this.directionbox[x].ymin) % 4));
+                var dir_size;
+                if (x == (this.fileheader[2] - 1))
+                    dir_size = 8 * (this.file.data.length - ptr.cur_byte) - ptr.cur_bit;
+                else
+                    dir_size = 8 * (this.directionpointer[x + 1] - ptr.cur_byte) - ptr.cur_bit;
                 
-                var first_col = (this.framebox[x][y].width - start_width)<=1?this.framebox[x][y].width:start_width;
-                var first_row = (this.framebox[x][y].height - start_height)<=1?this.framebox[x][y].height:start_height;
+                this.dataheader[x][5] = dir_size;
                 
-                var mid_cols = 1 + Math.trunc((this.framebox[x][y].width - start_width - 1) / 4);
-                var mid_rows = 1 + Math.trunc((this.framebox[x][y].height - start_height - 1) / 4);
+                // PixelCodeAndDisplacement
+                this.bitstream[x].push([]);
+                this.bitstream[x][4] = {
+                    stream: [],
+                    idx: 0,
+                    ptr: {
+                        cur_byte: ptr.cur_byte,
+                        cur_bit: ptr.cur_bit
+                    }
+                };
+
+                for (var j = 0; j < (this.dataheader[x][5] / 4); j++) {
+                    this.bitstream[x][4].stream.push(this.readBits(this.file.data, ptr, 4, false));
+                }
                 
-                var last_col = (this.framebox[x][y].width - first_col)==0?-1:((this.framebox[x][y].width - first_col) % 4);   // if 0, append width 4 at end
-                var last_row = (this.framebox[x][y].height - first_row)==0?-1:((this.framebox[x][y].height - first_row) % 4);   // if 0, append width 4 at end
+                this.pixelData = [];
+                this.cell_buffer = [];
                 
-                if((last_col == 1) || (last_col < 0)) // manually corrected
-                    mid_cols--;
+                /** Start Prepare Frame Buffer Cell's **/
+                
+                for (var y = 0; y < this.fileheader[3]; y++) {              
+                    var start_width = (4 - ((this.framebox[x][y].xmin - this.directionbox[x].xmin) % 4));
+                    var start_height = (4 - ((this.framebox[x][y].ymin - this.directionbox[x].ymin) % 4));
                     
-                if((last_row == 1) || (last_row < 0)) // manually corrected
-                    mid_rows--;
-                
-                for (var i = 0; i < (mid_rows + 1); i++) {
-                    this.framebox[x][y].cells.push([]);
-                    for (var j = 0; j < mid_cols; j++) {
+                    var first_col = (this.framebox[x][y].width - start_width)<=1?this.framebox[x][y].width:start_width;
+                    var first_row = (this.framebox[x][y].height - start_height)<=1?this.framebox[x][y].height:start_height;
+                    
+                    var mid_cols = 1 + Math.trunc((this.framebox[x][y].width - start_width - 1) / 4);
+                    var mid_rows = 1 + Math.trunc((this.framebox[x][y].height - start_height - 1) / 4);
+                    
+                    var last_col = (this.framebox[x][y].width - first_col)==0?-1:((this.framebox[x][y].width - first_col) % 4);   // if 0, append width 4 at end
+                    var last_row = (this.framebox[x][y].height - first_row)==0?-1:((this.framebox[x][y].height - first_row) % 4);   // if 0, append width 4 at end
+                    
+                    if((last_col == 1) || (last_col < 0)) // manually corrected
+                        mid_cols--;
+                        
+                    if((last_row == 1) || (last_row < 0)) // manually corrected
+                        mid_rows--;
+                    
+                    for (var i = 0; i < (mid_rows + 1); i++) {
+                        this.framebox[x][y].cells.push([]);
+                        for (var j = 0; j < mid_cols; j++) {
+                            this.framebox[x][y].cells[this.framebox[x][y].cells.length-1].push({
+                                w: (j == 0)?first_col:4, // first col can be smaller 4
+                                h: (i == 0)?first_row:( (i == mid_rows)?( (last_row <= 1)?(4+last_row):last_row ):4 ) // first row can be smaller 4, last row can be higher or smaller 4
+                            });
+                        }
                         this.framebox[x][y].cells[this.framebox[x][y].cells.length-1].push({
-                            w: (j == 0)?first_col:4, // first col can be smaller 4
+                            w: (j == 0)?first_col:((last_col > 0)?((last_col == 1)?5:last_col):4), // last row can be higher or smaller 4
                             h: (i == 0)?first_row:( (i == mid_rows)?( (last_row <= 1)?(4+last_row):last_row ):4 ) // first row can be smaller 4, last row can be higher or smaller 4
                         });
                     }
-                    this.framebox[x][y].cells[this.framebox[x][y].cells.length-1].push({
-                        w: (j == 0)?first_col:((last_col > 0)?((last_col == 1)?5:last_col):4), // last row can be higher or smaller 4
-                        h: (i == 0)?first_row:( (i == mid_rows)?( (last_row <= 1)?(4+last_row):last_row ):4 ) // first row can be smaller 4, last row can be higher or smaller 4
-                    });
+                    
+                    // Stage 1, fill pixel buffer
+                    try {
+                        this.decodePixelData(x, y);
+                        //console.log("Finished decompressing Direction", x, "Frame:", y);
+                    } catch(e) {
+                        console.error(this.file.name, "Failed Decoding Frame [Direction,Frame]:", "[" + x + "," + y + "]", e);
+                    }
                 }
                 
-                // Stage 1, fill pixel buffer
-                try {
-                    this.decodePixelData(x, y);
-                    console.log("Finished decompressing Direction", x, "Frame:", y);
-                } catch(e) {
-                    console.error(this.file.name, "Failed Decoding Frame [Direction,Frame]:", "[" + x + "," + y + "]", e);
+                /** End Prepare Frame Buffer Cell's **/
+                
+                // prepare the stage 2
+                // replace color codes in pixel buffer
+                for (var i = 0; i < this.pixelData.length; i++) {
+                    for (var j = 0; j < 4; j++) {
+                        var c = this.pixelData[i].val[j];
+                        this.pixelData[i].val[j] = this.dataheader[x][4][c];
+                    }
                 }
-            }
-            
-            /** End Prepare Frame Buffer Cell's **/
-            
-            // prepare the stage 2
-            // replace color codes in pixel buffer
-            for (var i = 0; i < this.pixelData.length; i++) {
-                for (var j = 0; j < 4; j++) {
-                    var c = this.pixelData[i].val[j];
-                    this.pixelData[i].val[j] = this.dataheader[x][4][c];
-                }
-            }
-            
-            // adjust PixelCodeAndDisplacement stream_ptr
-            var bits = this.bitstream[x][4].ptr.cur_bit + (this.bitstream[x][4].idx % 2) * 4;
-            this.bitstream[x][4].ptr = {
-                cur_byte: Math.trunc(this.bitstream[x][4].ptr.cur_byte + this.bitstream[x][4].idx / 2) + Math.trunc(bits / 8),
-                cur_bit: bits%8
-            };
-            
-            for (var frame = 0; frame < this.fileheader[3]; frame++) {
-                // stage 2, populate sprite data
-                this.spriteData[x].push([]);
-                this.spriteData[x][frame] = {
-                    width: this.directionbox[x].width,
-                    height: this.directionbox[x].height,
-                    data: this.create2dArray(this.directionbox[x].height, this.directionbox[x].width)
+                
+                // adjust PixelCodeAndDisplacement stream_ptr
+                var bits = this.bitstream[x][4].ptr.cur_bit + (this.bitstream[x][4].idx % 2) * 4;
+                this.bitstream[x][4].ptr = {
+                    cur_byte: Math.trunc(this.bitstream[x][4].ptr.cur_byte + this.bitstream[x][4].idx / 2) + Math.trunc(bits / 8),
+                    cur_bit: bits%8
                 };
                 
-                try {
-                    this.buildFrame(x, frame);
-                    console.log("Finished building Direction", x, "Frame:", frame);
-                } catch(e) {
-                    console.error(this.file.name, "Failed Building Frame [Direction,Frame]:", "[" + x + "," + frame + "]", e);
+                for (var frame = 0; frame < this.fileheader[3]; frame++) {
+                    // stage 2, populate sprite data
+                    this.spriteData[x].push([]);
+                    this.spriteData[x][frame] = {
+                        width: this.directionbox[x].width,
+                        height: this.directionbox[x].height,
+                        data: this.create2dArray(this.directionbox[x].height, this.directionbox[x].width)
+                    };
+                    
+                    try {
+                        this.buildFrame(x, frame);
+                        //console.log("Finished building Direction", x, "Frame:", frame);
+                        eventHub.$emit('loading', { file: this.file, percent: this.fileheader[3] * x + frame + 1, max: this.fileheader[3] * this.fileheader[2], info: "Unpacked direction " + x + " frame " + frame });
+                        await JSThread.yield();
+                    } catch(e) {
+                        console.error(this.file.name, "Failed Building Frame [Direction,Frame]:", "[" + x + "," + frame + "]", e);
+                    }
+                    
+                    idx = Math.ceil(this.bitstream[x][4].ptr.cur_byte + (this.bitstream[x][4].ptr.cur_bit / 8));
                 }
                 
-                idx = Math.ceil(this.bitstream[x][4].ptr.cur_byte + (this.bitstream[x][4].ptr.cur_bit / 8));
+                //console.log("Finished Direction:", x);
             }
             
-            console.log("Finished Direction:", x);
-        }
+            // console.log("File Header:",this.fileheader);
+            // console.log("Direction Pointer:",this.directionpointer);
+            // console.log("Direction Header:",this.directionheader, "Direction Cells:", this.directionbox);
+            // console.log("Frame Header:",this.frameheader, "Frame Cells:", this.framebox);
+            // console.log("Data Header", this.dataheader);
+            // console.log("Bitstream", this.bitstream);
+            
+            //console.log("\nFinished:",this.spriteData);
+            
+            this.directionbox = null;//[];
+            this.framebox = null;//[];
+            this.bitstream = null;//[];
+            this.frame_buffer = null;//[];
+            this.cell_buffer = null;//[];
+            this.pixelData = null;//[];
         
-        // console.log("File Header:",this.fileheader);
-        // console.log("Direction Pointer:",this.directionpointer);
-        // console.log("Direction Header:",this.directionheader, "Direction Cells:", this.directionbox);
-        // console.log("Frame Header:",this.frameheader, "Frame Cells:", this.framebox);
-        // console.log("Data Header", this.dataheader);
-        // console.log("Bitstream", this.bitstream);
+            return "Finished";
+        });
         
-        //console.log("\nFinished:",this.spriteData);
-        
-        this.directionbox = null;//[];
-        this.framebox = null;//[];
-        this.bitstream = null;//[];
-        this.frame_buffer = null;//[];
-        this.cell_buffer = null;//[];
-        this.pixelData = null;//[];
-        
-        if(this.palettes[0])
-            this.selectComposition({target:{value:this.palettes[0].map, name:this.palettes[0].name}});
+        threaded().then((msg) => {
+            //console.log(msg);
+            if(this.palettes[0])
+                this.selectComposition({target:{value:this.palettes[0].map, name:this.palettes[0].name}});
+            eventHub.$emit('finish', { file: this.file });
+        }).catch((error) => {
+            console.error(error);
+        });
     },
     updated() {
         if(this.directions.length === 0 && this.palettes[0])
             this.selectComposition({target:{value:this.palettes[0].map, name:this.palettes[0].name}});
-        else
-            this.selectComposition(null);
+        /*else
+            this.selectComposition(null);*/
     }
 });
  
@@ -841,14 +854,20 @@ Vue.component('animation', {
             dcc_files: [ ]
         },
         methods: {
-            removeAnimation: function(composition) {
-                console.log(composition);
-                this.dcc_files.splice(this.dcc_files.indexOf(composition),1);
+            removeAnimation: function(file) {
+                this.dcc_files.splice(this.dcc_files.indexOf(file),1);
             }
         },
         mounted() {
             this.eventHub.$on('new_animation', data => {
                 this.dcc_files.push(data);
+            });
+            
+            this.eventHub.$on('remove_file', data => {
+                var entry = this.dcc_files.find((file) => file.hash === data.hash);
+                if(entry) {
+                    this.removeAnimation(entry);
+                }
             });
         }
         

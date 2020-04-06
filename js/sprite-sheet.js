@@ -14,18 +14,19 @@ Vue.component('sprite-sheet', {
     <div class="blog-post">
         <h2>{{ file.name }}</h2>
         <select v-on:change="selectComposition">
-            <option v-for="palette in palettes" v-bind:value="palette.map" v-bind:key="palette.id" v-bind:name="palette.name">
+            <!--<option disabled selected value> -- select palette -- </option>-->
+            <option v-for="(palette, index) in palettes" v-bind:value="palette.map"  v-bind:key="palette.key" v-bind:name="palette.name">
                 {{ palette.name }}
             </option>
-            <option v-for="palette in compositions" v-bind:value="palette.map" v-bind:key="palette.id" v-bind:name="palette.name">
+            <option v-for="(palette, index) in compositions" v-bind:value="palette.map"  v-bind:key="palette.key" v-bind:name="palette.name">
                 {{ palette.name }}
             </option>
         </select>
         <button v-on:click="$emit('remove-sprite', file)">
             Remove
         </button>
-        <div><!-- v-bind:html="file.image">-->
-            <img src="file.image" v-bind:ref="file.name">
+        <div v-for="direction in directions">
+            <img v-bind:style="direction.image.style" v-bind:src="direction.image.src" v-bind:ref="direction.image.id">
         </div>
     </div>`,
     data: function() {
@@ -51,7 +52,7 @@ Vue.component('sprite-sheet', {
                 uint32_t next_block
                 uint32_t length
          */
-        return { raw: [], fileheader: [], framepointer: [], frameheader: [], spriteData: [], imageData: [], palettes: palettes, compositions: compositions }
+        return { raw: [], fileheader: [], framepointer: [], frameheader: [], spriteData: [], palettes: palettes, compositions: compositions, directions: [] }
     },
     methods: {
         str2DWORD: function(str) {
@@ -69,7 +70,7 @@ Vue.component('sprite-sheet', {
                 //var mapData = JSON.parse(data.map);
                 
                 
-                this.imageData = [];
+                var imageData = [];
                 
                 this.spriteData;
                 var canvas = document.createElement('canvas');
@@ -77,21 +78,21 @@ Vue.component('sprite-sheet', {
                 var maxFrameheight = 0;
                 for (var x = 0; x < this.fileheader[4]; x++) {
                     // Each direction
-                    this.imageData.push([]);
+                    imageData.push([]);
                     this.spriteData.push([]);
                     for (var y = 0; y < this.fileheader[5]; y++) {
                         // Each Frame
-                        this.imageData[x].push([]);
-                        this.imageData[x][y] = document.createElement('canvas');
-                        this.imageData[x][y].width = this.frameheader[x][y][1] + this.frameheader[x][y][3];
-                         if(maxFramewidth < this.imageData[x][y].width)
-                            maxFramewidth = this.imageData[x][y].width;
-                        this.imageData[x][y].height = this.frameheader[x][y][2] + this.frameheader[x][y][4];
-                        if(maxFrameheight < this.imageData[x][y].height)
-                            maxFrameheight = this.imageData[x][y].height;
-                        var graphics = this.imageData[x][y].getContext('2d');
+                        imageData[x].push([]);
+                        imageData[x][y] = document.createElement('canvas');
+                        imageData[x][y].width = this.frameheader[x][y][1] + this.frameheader[x][y][3];
+                         if(maxFramewidth < imageData[x][y].width)
+                            maxFramewidth = imageData[x][y].width;
+                        imageData[x][y].height = this.frameheader[x][y][2] + this.frameheader[x][y][4];
+                        if(maxFrameheight < imageData[x][y].height)
+                            maxFrameheight = imageData[x][y].height;
+                        var graphics = imageData[x][y].getContext('2d');
                         this.spriteData[x].push([]);
-                        this.spriteData[x][y] = graphics.getImageData(this.frameheader[x][y][3], this.frameheader[x][y][4], this.imageData[x][y].width, this.imageData[x][y].height);
+                        this.spriteData[x][y] = graphics.getImageData(this.frameheader[x][y][3], this.frameheader[x][y][4], imageData[x][y].width, imageData[x][y].height);
                         var index1 = 0;
                         var index2 = 0;
                         var index3 = this.frameheader[x][y][2] - 1;
@@ -112,7 +113,7 @@ Vue.component('sprite-sheet', {
                                     var num2 = this.raw[x][y][index1];
                                     index1 += 1;
                                     index4 += 1;
-                                    var idx = (index3*this.imageData[x][y].width + index2) * 4;
+                                    var idx = (index3*imageData[x][y].width + index2) * 4;
                                     this.spriteData[x][y].data[idx++] = mapData[num2][0];
                                     this.spriteData[x][y].data[idx++] = mapData[num2][1];
                                     this.spriteData[x][y].data[idx++] = mapData[num2][2];
@@ -125,96 +126,99 @@ Vue.component('sprite-sheet', {
                     }
                 }
                 
-                canvas.width = maxFramewidth * this.fileheader[5];
-                canvas.height = maxFrameheight * this.fileheader[4];
+                var windowWidth = Math.trunc(document.body.clientWidth * 0.7);
                 
-                var windowWidth = Math.floor(document.body.clientWidth * 0.7);
                 
-                let splice_cols = [this.fileheader[5]];
-                let splice_rows = 1;
-                let tmpWidth = canvas.width;
-                let tmpCols = this.fileheader[5];
-                while (tmpWidth > windowWidth) {
-                    while(tmpWidth > windowWidth) {
-                        tmpWidth -= maxFramewidth;
-                        splice_cols[splice_cols.length-1]--;
+                this.directions.length = 0;
+                
+                for (let row = 0; row < this.fileheader[4]; row++) {
+                    var canvas = document.createElement('canvas');
+                    canvas.width = maxFramewidth * this.fileheader[5];
+                    canvas.height = maxFrameheight;
+                    var graphics = canvas.getContext('2d');
+                    
+                    var frames_cnt = this.fileheader[5];
+                    
+                    for (var col = 0; col < frames_cnt; col++) {
+                        graphics.drawImage(imageData[row][col], col * maxFramewidth, 0);
                     }
-                    canvas.width = tmpWidth;
-                    canvas.height += maxFrameheight;
-                    splice_rows++;
-                    tmpCols -= splice_cols[splice_cols.length-1];
-                    splice_cols.push(tmpCols);
-                    tmpWidth = splice_cols[splice_cols.length-1] * maxFramewidth;
-                }
-                
-                var ctx = canvas.getContext('2d');
-                
-                for (var x = this.fileheader[4]; x > 0;) {
-                    --x;
-                    var row = x + (--splice_rows);
-                    for (var y = this.fileheader[5]; y > 0;) {
-                        --y;
-                        var col = --splice_cols[splice_cols.length-1];
-                        ctx.drawImage(this.imageData[x][y], col * maxFramewidth, row * maxFrameheight);
-                        if(splice_cols[splice_cols.length-1] == 0) {
-                            splice_cols.pop();
-                            --row;
+                    
+                    this.directions.push({
+                        image: {
+                            src: canvas.toDataURL(),
+                            style: {
+                                'max-width': windowWidth + "px"
+                            },
+                            id: "png_" + row
                         }
-                    }
+                    });
                 }
                 
-                this.file.image = /*"<img src:'" + */canvas.toDataURL()/* + "'>"*/;
-                this.$refs[this.file.name].src = this.file.image;
+                //this.file.image = /*"<img src:'" + */canvas.toDataURL()/* + "'>"*/;
+                //this.$refs[this.file.name].src = this.file.image;
             }
         }
     },
     mounted() {
-        var rawLength = this.file.data.length;
-        this.raw = [];
-        var idx = 0;
-        var filesize = 6;
-        for (var i = 0; i < filesize; i++) {
-            this.fileheader.push(this.str2DWORD(this.file.data.slice(idx,idx+=4)));
-        }
-        filesize = this.fileheader[4] * this.fileheader[5];
-        for (var i = 0; i < filesize; i++) {
-            this.framepointer.push(this.str2DWORD(this.file.data.slice(idx,idx+=4)));
-        }
-        filesize = 8;
-        for (var x = 0; x < this.fileheader[4]; x++) {
-            // Each direction
-            this.frameheader.push([]);
-            this.raw.push([]);
-            for (var y = 0; y < this.fileheader[5]; y++) {
-                // Each Frame
-                this.frameheader[x].push([]);
-                this.raw[x].push([]);
-                if((this.framepointer[x * y + y] != (idx + 3)) && (this.framepointer[x * y + y] != idx)) {
-                    var term = this.file.data.slice(idx,idx+=3);
-                    console.warn("Something is wrong:", this.file.name,"Direction/Frame:",x,"/",y,"Expected adress:",idx,"Given:",this.framepointer[x * y + y],"Data: ", term.charCodeAt(0).toString(16), term.charCodeAt(1).toString(16), term.charCodeAt(2).toString(16));
-                }
-                idx = this.framepointer[x * y + y];
-                for (var i = 0; i < filesize; i++) {
-                    this.frameheader[x][y].push(this.str2DWORD(this.file.data.slice(idx,idx+=4)));
-                }
-                for (var j = 0; j < this.frameheader[x][y][7]; j++) {
-                    this.raw[x][y].push(this.file.data.charCodeAt(idx++));
+        var threaded = JSThread.create(async () => {
+            var rawLength = this.file.data.length;
+            this.raw = [];
+            var idx = 0;
+            var filesize = 6;
+            for (var i = 0; i < filesize; i++) {
+                this.fileheader.push(this.str2DWORD(this.file.data.slice(idx,idx+=4)));
+            }
+            filesize = this.fileheader[4] * this.fileheader[5];
+            for (var i = 0; i < filesize; i++) {
+                this.framepointer.push(this.str2DWORD(this.file.data.slice(idx,idx+=4)));
+            }
+            filesize = 8;
+            for (var x = 0; x < this.fileheader[4]; x++) {
+                // Each direction
+                this.frameheader.push([]);
+                this.raw.push([]);
+                for (var y = 0; y < this.fileheader[5]; y++) {
+                    // Each Frame
+                    this.frameheader[x].push([]);
+                    this.raw[x].push([]);
+                    if((this.framepointer[x * y + y] != (idx + 3)) && (this.framepointer[x * y + y] != idx)) {
+                        var term = this.file.data.slice(idx,idx+=3);
+                        console.warn("Something is wrong:", this.file.name,"Direction/Frame:",x,"/",y,"Expected adress:",idx,"Given:",this.framepointer[x * y + y],"Data: ", term.charCodeAt(0).toString(16), term.charCodeAt(1).toString(16), term.charCodeAt(2).toString(16));
+                    }
+                    idx = this.framepointer[x * y + y];
+                    for (var i = 0; i < filesize; i++) {
+                        this.frameheader[x][y].push(this.str2DWORD(this.file.data.slice(idx,idx+=4)));
+                    }
+                    for (var j = 0; j < this.frameheader[x][y][7]; j++) {
+                        this.raw[x][y].push(this.file.data.charCodeAt(idx++));
+                    }
+                    
+                    eventHub.$emit('loading', { file: this.file, percent: this.fileheader[5] * x + y + 1, max: this.fileheader[5] * this.fileheader[4], info: "Unpacked direction " + x + " frame " + y });
+                    await JSThread.yield();
                 }
             }
-        }
+            
+            //console.log("File Header:",this.fileheader);
+            //console.log("Frame Pointer:",this.framepointer);
+            //console.log("Frame Header:",this.frameheader);	
+            return "Finished";
+        });
         
-        //console.log("File Header:",this.fileheader);
-        //console.log("Frame Pointer:",this.framepointer);
-        //console.log("Frame Header:",this.frameheader);	
-        
-        if(this.palettes[0])
-            this.selectComposition({target:{value:this.palettes[0].map, name:this.palettes[0].name}});
+        threaded().then((msg) => {
+            //console.log(msg);
+            if(this.palettes[0])
+                this.selectComposition({target:{value:this.palettes[0].map, name:this.palettes[0].name}});
+            eventHub.$emit('finish', { file: this.file });
+        }).catch((error) => {
+            console.error(error);
+        });
+       
     },
     updated() {
-        if(this.palettes[0])
+        if(this.directions.length === 0 && this.palettes[0])
             this.selectComposition({target:{value:this.palettes[0].map, name:this.palettes[0].name}});
-        else
-            this.selectComposition(null);
+        /*else
+            this.selectComposition(null);*/
     }
 });
  
@@ -226,14 +230,20 @@ Vue.component('sprite-sheet', {
             dc6_files: [ ]
         },
         methods: {
-            removeSprite: function(composition) {
-                console.log(composition);
-                this.dc6_files.splice(this.dc6_files.indexOf(composition),1);
+            removeSprite: function(file) {
+                this.dc6_files.splice(this.dc6_files.indexOf(file),1);
             }
         },
         mounted() {
             this.eventHub.$on('new_spritesheet', data => {
                 this.dc6_files.push(data);
+            });
+            
+            this.eventHub.$on('remove_file', data => {
+                var entry = this.dc6_files.find((file) => file.hash === data.hash);
+                if(entry) {
+                    this.removeSprite(entry);
+                }
             });
         }
         
