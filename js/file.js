@@ -85,14 +85,14 @@ Vue.component('filedropper', {
                         if (e.preventDefault) { e.preventDefault(); }
                         return false;
                     }
-
-                    // Tells the browser that we *can* drop on this target
-                    this.addEventHandler(drop, 'dragover', cancel);
-                    this.addEventHandler(drop, 'dragenter', cancel);
-                    this.addEventHandler(drop, 'drop', (e) => {
+                    
+                    var mountFiles = (e) => {
                         e = e || window.event; // get window.event if e argument missing (in IE)   
                         if (e.preventDefault) { e.preventDefault(); } // stops the browser from redirecting off to the image.
-                            var dt    = e.dataTransfer;
+                            if(e.dataTransfer)
+                                var dt    = e.dataTransfer;
+                            else if(e.path[0])
+                                var dt    = e.path[0];
                             var files = dt.files;
                             var threaded = JSThread.create(async () => {
                                 for (var i=0; i<files.length; i++) {
@@ -123,10 +123,10 @@ Vue.component('filedropper', {
                                         
                                         list.appendChild(newFile); 
                                         
-                                        if(file.name.toLowerCase().indexOf(".dat") > -1 && bin.slice(0, 3) === "\0\0\0" && bin.slice(765) === "ÿÿÿ" && bin.length === 3 * 256) {
+                                        if((file.name.toLowerCase().indexOf(".dat") > -1 || file.name.toLowerCase().indexOf(".pal") > -1) && bin.slice(0, 3) === "\0\0\0" && bin.slice(765) === "ÿÿÿ" && bin.length === 3 * 256) {
                                             eventHub.$emit('new_palette', { hash: file.hash, name: file.name, data: bin, spritesheet: "", image: "" });
                                             fileType = "Palette";
-                                        } else if(file.name.toLowerCase().indexOf(".dat") > -1 && bin.length % 256 === 0) {
+                                        } else if((file.name.toLowerCase().indexOf(".dat") > -1 || file.name.toLowerCase().indexOf(".pal") > -1) && bin.length % 256 === 0) {
                                             eventHub.$emit('new_colormap', { hash: file.hash, name: file.name, data: bin, spritesheet: "", image: "" });
                                             fileType = "Color Map";
                                         } else if(file.name.toLowerCase().indexOf(".dcc") > -1) {
@@ -163,7 +163,26 @@ Vue.component('filedropper', {
                                console.error(error);
                             });
                             
-                    });
+                    };
+                    
+                    var fileBrowser = () => {
+                       var input = document.createElement('input');
+                       input.type = "file";
+                       input.accept = [".dat,palette/color-map", ".pal,palette/color-map", ".dc6,image/spritesheet", ".dcc,animation/spritesheet"];
+                       input.multiple = "multiple";
+                       if(input && document.createEvent) {
+                          var evt = document.createEvent("MouseEvents");
+                          evt.initEvent("click", true, false);
+                          this.addEventHandler(input, 'change', mountFiles);
+                          input.dispatchEvent(evt);
+                       }
+                    }
+
+                    // Tells the browser that we *can* drop on this target
+                    this.addEventHandler(drop, 'dragover', cancel);
+                    this.addEventHandler(drop, 'dragenter', cancel);
+                    this.addEventHandler(drop, 'drop', mountFiles);
+                    this.addEventHandler(drop, 'click', fileBrowser);
                 });
             } else { 
                 document.getElementById('status').innerHTML = 'Your browser does not support the HTML5 FileReader.';
