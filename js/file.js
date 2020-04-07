@@ -79,109 +79,110 @@ Vue.component('filedropper', {
                 this.addEventHandler(window, 'load', () => {
                     var status = document.getElementById('filestatus');
                     var drop = document.getElementById('filedrop');
+                    var input = document.getElementById("fileinput");
                     var list = document.getElementById('filelist');
-            
+                
                     function cancel(e) {
                         if (e.preventDefault) { e.preventDefault(); }
                         return false;
                     }
-                    
                     var mountFiles = (e) => {
                         e = e || window.event; // get window.event if e argument missing (in IE)   
                         if (e.preventDefault) { e.preventDefault(); } // stops the browser from redirecting off to the image.
-                            if(e.dataTransfer)
-                                var dt    = e.dataTransfer;
-                            else if(e.path[0])
-                                var dt    = e.path[0];
-                            var files = dt.files;
-                            var threaded = JSThread.create(async () => {
-                                for (var i=0; i<files.length; i++) {
-                                    while(this.loadSemaphore)
-                                        await JSThread.sleep(10);
-                                    this.loadSemaphore = true;
-                                    var file = files[i];
-                                    var reader = new FileReader();
-                                    
-                                    this.roundTime.start = new Date().getTime();
-                                    $("#filestatus").html(`<progress id="progressbar" value="0" max="100">0 %</progress>`);
-                                    
-                                    //attach event handlers here...
-                                    this.addEventHandler(reader, 'loadend', async function(e, file) {
-                                        var bin           = this.result; 
-                                        var newFile       = document.createElement('div');
-                                        var fileType = "File"
-                                        
-                                        file.hash = hashString(file.name);
-                                        newFile.id = file.hash;
-                                        newFile.style.display = 'none';
-                                        var exists = document.getElementById(newFile.id);
-                                        if(exists) {
-                                            eventHub.$emit('remove_file', { hash: file.hash, name: file.name, data: bin, spritesheet: "", image: "" });
-                                            list.removeChild(exists);
-                                            await JSThread.yield();
-                                        } 
-                                        
-                                        list.appendChild(newFile); 
-                                        
-                                        if((file.name.toLowerCase().indexOf(".dat") > -1 || file.name.toLowerCase().indexOf(".pal") > -1) && bin.slice(0, 3) === "\0\0\0" && bin.slice(765) === "ÿÿÿ" && bin.length === 3 * 256) {
-                                            eventHub.$emit('new_palette', { hash: file.hash, name: file.name, data: bin, spritesheet: "", image: "" });
-                                            fileType = "Palette";
-                                        } else if((file.name.toLowerCase().indexOf(".dat") > -1 || file.name.toLowerCase().indexOf(".pal") > -1) && bin.length % 256 === 0) {
-                                            eventHub.$emit('new_colormap', { hash: file.hash, name: file.name, data: bin, spritesheet: "", image: "" });
-                                            fileType = "Color Map";
-                                        } else if(file.name.toLowerCase().indexOf(".dcc") > -1) {
-                                            eventHub.$emit('new_animation', { hash: file.hash, name: file.name, data: bin, spritesheet: "", image: "" });
-                                            fileType = "Animation";
-                                        } else if(file.name.toLowerCase().indexOf(".dc6") > -1) {
-                                            eventHub.$emit('new_spritesheet', { hash: file.hash, name: file.name, data: bin, spritesheet: "", image: "" });
-                                            fileType = "Spritesheet";
-                                        } else {
-                                            fileType = "<font color='red'>Unknown Format</font>";
-                                            this.loadSemaphore = false;
-                                            newFile.style.display = 'block';
-                                            eventHub.$emit('finish', { file: file });
-                                        }
-                                        
-                                        newFile.innerHTML = 'File (<i><b>' +fileType+ '</b></i>): \''+file.name+'\' ('+bytesToSize(file.size) + ')';
-
-                                        
-                                        //var img = document.createElement("img"); 
-                                        //img.file = file;   
-                                        //img.src = bin;
-                                        //list.appendChild(img);
-                                    }.bindToEventHandler(file));
-
-                                    reader.readAsBinaryString(file);
-                                }
+                        if(e.dataTransfer) {
+                            var dt = e.dataTransfer;
+                        } else {
+                            var dt = e.target;
+                        }
+                        
+                        if(!dt.files) {
+                            $("#filestatus").html("<p>Your browser seems to not like that :-(</p><p>" + JSON.stringify(e.target) + "</p>")
+                            return false
+                        }
+                        
+                        var files = dt.files;
+                        var threaded = JSThread.create(async () => {
+                            for (var i=0; i<files.length; i++) {
+                                while(this.loadSemaphore)
+                                    await JSThread.sleep(10);
+                                this.loadSemaphore = true;
+                                var file = files[i];
+                                var reader = new FileReader();
                                 
-                                return false;
-                            });
+                                this.roundTime.start = new Date().getTime();
+                                $("#filestatus").html(`<progress id="progressbar" value="0" max="100">0 %</progress>`);
+                                
+                                this.addEventHandler(reader, 'loadend', async function(e, file) {
+                                    var bin           = this.result; 
+                                    var newFile       = document.createElement('div');
+                                    var fileType = "File"
+
+                                    file.hash = hashString(file.name);
+                                    newFile.id = file.hash;
+                                    newFile.style.display = 'none';
+                                    var exists = document.getElementById(newFile.id);
+                                    if(exists) {
+                                        eventHub.$emit('remove_file', { hash: file.hash, name: file.name, data: bin, spritesheet: "", image: "" });
+                                        list.removeChild(exists);
+                                        await JSThread.yield();
+                                    } 
+                                    
+                                    list.appendChild(newFile); 
+                                    
+                                    if((file.name.toLowerCase().indexOf(".dat") > -1 || file.name.toLowerCase().indexOf(".pal") > -1) && bin.slice(0, 3) === "\0\0\0" && bin.slice(765) === "ÿÿÿ" && bin.length === 3 * 256) {
+                                        eventHub.$emit('new_palette', { hash: file.hash, name: file.name, data: bin, spritesheet: "", image: "" });
+                                        fileType = "Palette";
+                                    } else if((file.name.toLowerCase().indexOf(".dat") > -1 || file.name.toLowerCase().indexOf(".pal") > -1) && bin.length % 256 === 0) {
+                                        eventHub.$emit('new_colormap', { hash: file.hash, name: file.name, data: bin, spritesheet: "", image: "" });
+                                        fileType = "Color Map";
+                                    } else if(file.name.toLowerCase().indexOf(".dcc") > -1) {
+                                        eventHub.$emit('new_animation', { hash: file.hash, name: file.name, data: bin, spritesheet: "", image: "" });
+                                        fileType = "Animation";
+                                    } else if(file.name.toLowerCase().indexOf(".dc6") > -1) {
+                                        eventHub.$emit('new_spritesheet', { hash: file.hash, name: file.name, data: bin, spritesheet: "", image: "" });
+                                        fileType = "Spritesheet";
+                                    } else {
+                                        fileType = "<font color='red'>Unknown Format</font>";
+                                        this.loadSemaphore = false;
+                                        newFile.style.display = 'block';
+                                        eventHub.$emit('finish', { file: file });
+                                    }
+                                    
+                                    newFile.innerHTML = 'File (<i><b>' +fileType+ '</b></i>): \''+file.name+'\' ('+bytesToSize(file.size) + ')';
+
+                                }.bindToEventHandler(file));
+
+                                reader.readAsBinaryString(file);
+                            }
                             
-                            threaded().then((finish) => {
-                                return finish;
-                            }).catch((error) => {
-                               console.error(error);
-                            });
+                            return false;
+                        });
+                        
+                        threaded().then((finish) => {
+                            return finish;
+                        }).catch((error) => {
+                            $("#filestatus").html("<p>Your browser seems to not support some features.</p><p>" + error + ":</p><p>" + error.stack + "</p>");
+                            return false;
+                        });
                             
                     };
                     
                     var fileBrowser = () => {
-                       var input = document.createElement('input');
-                       input.type = "file";
-                       input.accept = ["*"];//".dat,palette/color-map", ".pal,palette/color-map", ".dc6,image/spritesheet", ".dcc,animation/spritesheet"];
-                       input.multiple = "multiple";
-                       if(input && document.createEvent) {
-                          var evt = document.createEvent("MouseEvents");
-                          evt.initEvent("click", true, false);
-                          this.addEventHandler(input, 'change', mountFiles);
-                          input.dispatchEvent(evt);
-                       }
+                        input.setAttribute("multiple", "multiple");
+                        input.accept = ".dat,.pal,.dc6,.dcc";
+                        input.value = null;
+                        if(input && document.createEvent) {
+                            var evt = document.createEvent("MouseEvents");
+                            evt.initEvent("click", true, false);
+                            input.dispatchEvent(evt);
+                        }
                     }
 
                     // Tells the browser that we *can* drop on this target
                     this.addEventHandler(drop, 'dragover', cancel);
                     this.addEventHandler(drop, 'dragenter', cancel);
                     this.addEventHandler(drop, 'drop', mountFiles);
+                    this.addEventHandler(input, 'change', mountFiles);
                     this.addEventHandler(drop, 'click', fileBrowser);
                 });
             } else { 
