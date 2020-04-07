@@ -168,7 +168,7 @@ Vue.component('filedropper', {
                     var fileBrowser = () => {
                        var input = document.createElement('input');
                        input.type = "file";
-                       input.accept = [".dat,palette/color-map", ".pal,palette/color-map", ".dc6,image/spritesheet", ".dcc,animation/spritesheet"];
+                       input.accept = ["*"];//".dat,palette/color-map", ".pal,palette/color-map", ".dc6,image/spritesheet", ".dcc,animation/spritesheet"];
                        input.multiple = "multiple";
                        if(input && document.createEvent) {
                           var evt = document.createEvent("MouseEvents");
