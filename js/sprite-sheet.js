@@ -64,6 +64,64 @@ Vue.component('sprite-sheet', {
             return new DataView(buf).getUint32(0, true); // little Endian
         },
         
+        readBits: function(data, ptr, bits, signed) {
+            var b = 0;
+            var dest_bit = 0;
+            var dest_byte = 0;
+
+            var buf = new ArrayBuffer(4);
+
+            var retVal = new Uint8Array(buf);
+            
+            if (bits == 0)
+                return 0;
+
+            if (bits < 0)
+                return 0;
+
+            if (bits > 32)
+                return 0;
+
+            for (b = 0; b < bits; b++) {
+                var valByte = data.charCodeAt(ptr.cur_byte);
+                if (valByte & (1 << ptr.cur_bit))
+                    retVal[dest_byte] |= (1 << dest_bit);
+
+                dest_bit++;
+                if (dest_bit >= 8) {
+                    dest_bit = 0;
+                    dest_byte++;
+                }
+
+                ptr.cur_bit++;
+                if (ptr.cur_bit >= 8) {
+                    ptr.cur_bit = 0;
+                    ptr.cur_byte++;
+                }
+            }
+            
+            var highbit = bits;
+            var highbyte = 0;
+            
+            while (highbit > 8) {
+                highbit -= 8;
+                highbyte++;
+                
+            };
+
+            // signed value handle
+            if (signed && (retVal[highbyte] & (1 << (highbit - 1)))) {
+                // negative : negate result
+                retVal[highbyte++] |= ~((1 << highbit) - 1);
+                for (var i = highbyte; i < 4; i++) {
+                    retVal[i] |= 255;
+                }
+                return new DataView(buf).getInt32(0, true);
+            }
+
+            return new DataView(buf).getUint32(0, true);
+        },
+        
         selectComposition: function(e) {
             if(e) {
                 var mapData = JSON.parse(e.target.value);
@@ -84,15 +142,15 @@ Vue.component('sprite-sheet', {
                         // Each Frame
                         imageData[x].push([]);
                         imageData[x][y] = document.createElement('canvas');
-                        imageData[x][y].width = this.frameheader[x][y][1] + this.frameheader[x][y][3];
+                        imageData[x][y].width = this.frameheader[x][y][1];
                          if(maxFramewidth < imageData[x][y].width)
                             maxFramewidth = imageData[x][y].width;
-                        imageData[x][y].height = this.frameheader[x][y][2] + this.frameheader[x][y][4];
+                        imageData[x][y].height = this.frameheader[x][y][2];
                         if(maxFrameheight < imageData[x][y].height)
                             maxFrameheight = imageData[x][y].height;
                         var graphics = imageData[x][y].getContext('2d');
                         this.spriteData[x].push([]);
-                        this.spriteData[x][y] = graphics.getImageData(this.frameheader[x][y][3], this.frameheader[x][y][4], imageData[x][y].width, imageData[x][y].height);
+                        this.spriteData[x][y] = graphics.getImageData(0, 0, imageData[x][y].width, imageData[x][y].height);
                         var index1 = 0;
                         var index2 = 0;
                         var index3 = this.frameheader[x][y][2] - 1;
@@ -118,7 +176,7 @@ Vue.component('sprite-sheet', {
                                     this.spriteData[x][y].data[idx++] = mapData[num2][1];
                                     this.spriteData[x][y].data[idx++] = mapData[num2][2];
                                     this.spriteData[x][y].data[idx] = 255;
-                                    graphics.putImageData(this.spriteData[x][y], this.frameheader[x][y][3], this.frameheader[x][y][4]);
+                                    graphics.putImageData(this.spriteData[x][y], 0, 0);
                                     index2 += 1;
                                 }
                             }
@@ -164,14 +222,20 @@ Vue.component('sprite-sheet', {
             var rawLength = this.file.data.length;
             this.raw = [];
             var idx = 0;
+            let ptr = {
+                cur_byte: idx,
+                cur_bit: 0
+            };
             var filesize = 6;
             for (var i = 0; i < filesize; i++) {
-                this.fileheader.push(this.str2DWORD(this.file.data.slice(idx,idx+=4)));
+                this.fileheader.push(this.readBits(this.file.data, ptr, 32, false));
             }
             filesize = this.fileheader[4] * this.fileheader[5];
             for (var i = 0; i < filesize; i++) {
-                this.framepointer.push(this.str2DWORD(this.file.data.slice(idx,idx+=4)));
+                this.framepointer.push(this.readBits(this.file.data, ptr, 32, false));
             }
+            
+            
             filesize = 8;
             for (var x = 0; x < this.fileheader[4]; x++) {
                 // Each direction
@@ -181,16 +245,19 @@ Vue.component('sprite-sheet', {
                     // Each Frame
                     this.frameheader[x].push([]);
                     this.raw[x].push([]);
-                    if((this.framepointer[x * y + y] != (idx + 3)) && (this.framepointer[x * y + y] != idx)) {
-                        var term = this.file.data.slice(idx,idx+=3);
-                        console.warn("Something is wrong:", this.file.name,"Direction/Frame:",x,"/",y,"Expected adress:",idx,"Given:",this.framepointer[x * y + y],"Data: ", term.charCodeAt(0).toString(16), term.charCodeAt(1).toString(16), term.charCodeAt(2).toString(16));
+                    if((this.framepointer[x * y + y] != (ptr.cur_byte + 3)) && (this.framepointer[x * y + y] != ptr.cur_byte)) {
+                        var term = this.readBits(this.file.data, ptr, 24, false);
+                        console.warn("Something is wrong:", this.file.name,"Direction/Frame:",x,"/",y,"Expected adress:",ptr.cur_byte,"Given:",this.framepointer[x * y + y],"Data: ", term.charCodeAt(0).toString(16), term.charCodeAt(1).toString(16), term.charCodeAt(2).toString(16));
                     }
-                    idx = this.framepointer[x * y + y];
+                    ptr = {
+                        cur_byte: this.framepointer[x * y + y],
+                        cur_bit: 0
+                    };
                     for (var i = 0; i < filesize; i++) {
-                        this.frameheader[x][y].push(this.str2DWORD(this.file.data.slice(idx,idx+=4)));
+                        this.frameheader[x][y].push(this.readBits(this.file.data, ptr, 32, true));
                     }
                     for (var j = 0; j < this.frameheader[x][y][7]; j++) {
-                        this.raw[x][y].push(this.file.data.charCodeAt(idx++));
+                        this.raw[x][y].push(this.readBits(this.file.data, ptr, 8, false));
                     }
                     
                     eventHub.$emit('loading', { file: this.file, percent: this.fileheader[5] * x + y + 1, max: this.fileheader[5] * this.fileheader[4], info: "Unpacked direction " + x + " frame " + y });
