@@ -85,7 +85,7 @@ Vue.component('animation', {
                 bit[]               PixelValuesKey[256]
                 
          */
-        return { raw: [], fileheader: [], directionpointer: [], directionheader: [], directionbox: [], frameheader: [], framebox: [], dataheader: [], bitstream: [], frame_buffer: [], cell_buffer: [], pixelData: [], spriteData: [], palettes: palettes, compositions: compositions, directions: [] }
+        return { raw: [], fileheader: [], directionpointer: [], directionheader: [], directionbox: [], frameheader: [], framebox: [], dataheader: [], bitstream: [], cell_buffer: [], pixelData: [], spriteData: [], palettes: palettes, compositions: compositions, directions: [] }
     },
     methods: {
         str2DWORD: function(str) {
@@ -260,7 +260,7 @@ Vue.component('animation', {
             }
         },
         
-        create2dArray: (rows, columns) => [...Array(rows).keys()].map(i => Array(columns)),
+        create2dArray: (rows, columns) => [...new Uint8Array(rows).keys()].map(i => new Uint8Array(columns)),
         
         blit: function(source, destination, x_source, y_source, x_dest, y_dest, width, height) {
             for (var row = y_source; row < (y_source + height); row++) {
@@ -367,7 +367,11 @@ Vue.component('animation', {
                     // for the buffer cell that was used by this frame cell,
                     // save the width & size of the current frame cell
                     // (needed for further tests about equalcell)
-                   Object.assign(this.directionbox[direction].cells[buf_row][buf_col].buffer, cell);
+                    this.directionbox[direction].cells[buf_row][buf_col].buffer.width = cell.width;
+                    this.directionbox[direction].cells[buf_row][buf_col].buffer.height = cell.height;
+                    this.directionbox[direction].cells[buf_row][buf_col].buffer.data = this.create2dArray(cell.height, cell.width);
+                    this.blit(cell, this.directionbox[direction].cells[buf_row][buf_col].buffer, 0, 0, 0, 0, cell.width, cell.height);
+                    //Object.assign(this.directionbox[direction].cells[buf_row][buf_col].buffer, cell);
                     
                     x0 += cell.width;
                 }
@@ -500,6 +504,7 @@ Vue.component('animation', {
         var threaded = JSThread.create(async () => {
             var rawLength = this.file.data.length;
             this.raw = [];
+            var status = 0;
             var idx = 0;
             var ptr = {
                     cur_byte: idx,
@@ -538,7 +543,6 @@ Vue.component('animation', {
                 this.dataheader.push([0,0,0,0,[],0]);
                 this.bitstream.push([]);
                 this.spriteData.push([]);
-                this.raw.push([]);
                 if(this.directionpointer[x] != idx) {
                     console.warn(JSON.stringify(ptr));
                     console.warn("Something is wrong:", this.file.name,"Direction:",x,"Expected adress:",this.directionpointer[x],"Given:",idx);
@@ -565,7 +569,6 @@ Vue.component('animation', {
                 for (var y = 0; y < this.fileheader[3]; y++) {
                     // Each Frame
                     this.frameheader[x].push([]);
-                    this.raw[x].push([]);
                     
                     this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][2], false));
                     this.frameheader[x][y].push(this.readBits(this.file.data, ptr, this.directionheader[x][3], false));
@@ -763,10 +766,19 @@ Vue.component('animation', {
                     try {
                         this.decodePixelData(x, y);
                         //console.log("Finished decompressing Direction", x, "Frame:", y);
+                        status += 1;
+                        eventHub.$emit('loading', { file: this.file, percent: status, max: 2 * this.fileheader[3] * this.fileheader[2], info: "Decoded pixeldata direction " + x + " frame " + y });
+                            await JSThread.yield();
                     } catch(e) {
                         console.error(this.file.name, "Failed Decoding Frame [Direction,Frame]:", "[" + x + "," + y + "]", e);
                     }
                 }
+                
+                // Free heap
+                this.bitstream[x][0] = null;
+                this.bitstream[x][1] = null;
+                this.bitstream[x][2] = null;
+                this.bitstream[x][3] = null;
                 
                 /** End Prepare Frame Buffer Cell's **/
                 
@@ -798,14 +810,19 @@ Vue.component('animation', {
                     try {
                         this.buildFrame(x, frame);
                         //console.log("Finished building Direction", x, "Frame:", frame);
-                        eventHub.$emit('loading', { file: this.file, percent: this.fileheader[3] * x + frame + 1, max: this.fileheader[3] * this.fileheader[2], info: "Unpacked direction " + x + " frame " + frame });
+                        status += 1;
+                        eventHub.$emit('loading', { file: this.file, percent: status, max: 2 * this.fileheader[3] * this.fileheader[2], info: "Unpacked direction " + x + " frame " + frame });
                         await JSThread.yield();
                     } catch(e) {
                         console.error(this.file.name, "Failed Building Frame [Direction,Frame]:", "[" + x + "," + frame + "]", e);
                     }
                     
                     idx = Math.ceil(this.bitstream[x][4].ptr.cur_byte + (this.bitstream[x][4].ptr.cur_bit / 8));
+                    
+                    this.framebox[x][frame] = null;
                 }
+                
+                this.bitstream[x][4] = null;
                 
                 //console.log("Finished Direction:", x);
             }
@@ -822,7 +839,6 @@ Vue.component('animation', {
             this.directionbox = null;//[];
             this.framebox = null;//[];
             this.bitstream = null;//[];
-            this.frame_buffer = null;//[];
             this.cell_buffer = null;//[];
             this.pixelData = null;//[];
         

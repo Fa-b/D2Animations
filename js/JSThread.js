@@ -21,7 +21,7 @@ if (!this.setImmediate) { // polyfill for non-node applications, way faster than
 			} while (funcs[fid]);
 
 			funcs[fid] = {func, args};
-			window.postMessage({fid}, window.origin);
+			window.postMessage({fid});//, window.origin);
 		};
 
 		polyfillStatus = 'setImmediate polyfill';

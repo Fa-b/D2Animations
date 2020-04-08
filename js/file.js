@@ -104,7 +104,7 @@ Vue.component('filedropper', {
                         var threaded = JSThread.create(async () => {
                             for (var i=0; i<files.length; i++) {
                                 while(this.loadSemaphore)
-                                    await JSThread.sleep(10);
+                                    await JSThread.sleep(100);
                                 this.loadSemaphore = true;
                                 var file = files[i];
                                 var reader = new FileReader();
