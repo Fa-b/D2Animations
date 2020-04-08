@@ -34,7 +34,7 @@ Vue.component('animation', {
                     <div v-bind:style="direction.animation.style" v-bind:ref="direction.animation.id"></div>
                     <p style="grid-area:1/3/1/3">{{direction.animation.fpa}} FPA</p>
                     <p style="grid-area:2/3/2/3" v-bind:value="direction.animation.activeFrame">Frame: {{direction.animation.activeFrame}}</p>
-                    <input type="range" min="4" max="255" v-bind:value="direction.animation.fpa" v-on:input="direction.animation.restart($event.target.value)" class="slider">
+                    <input type="range" min="4" max="256" v-bind:value="direction.animation.fpa" v-on:input="direction.animation.restart($event.target.value)" class="slider">
                 </div>
                 
             </div>
@@ -260,7 +260,14 @@ Vue.component('animation', {
             }
         },
         
-        create2dArray: (rows, columns) => [...new Uint8Array(rows).keys()].map(i => new Uint8Array(columns)),
+        create2dArray: (rows, columns) => [...Array(rows).keys()].map(i => new Uint8Array(columns)),
+        /*create2dArray: (rows, columns) => {
+            const ret = Array(rows.length);
+            for(let i = 0,l=rows.length;i<l;i++) {
+                ret[i] = new Uint8Array(columns);
+            }
+            return ret;
+        },*/
         
         blit: function(source, destination, x_source, y_source, x_dest, y_dest, width, height) {
             for (var row = y_source; row < (y_source + height); row++) {
@@ -289,95 +296,112 @@ Vue.component('animation', {
         },
         
         buildFrame: function(direction, frame) {
-            var f_cell_w  = this.framebox[direction][frame].cells[0].length;
-            var f_cell_h  = this.framebox[direction][frame].cells.length;
-            var x0 = this.framebox[direction][frame].xmin - this.directionbox[direction].xmin;
-            var y0 = this.framebox[direction][frame].ymin - this.directionbox[direction].ymin;
-            
+
+            const curFrame = this.framebox[direction][frame];
+            const curCells = curFrame.cells;
+
+            const curDirection = this.directionbox[direction];
+
+            const pixelData = this.pixelData;
+
+            var f_cell_w  = curCells[0].length;
+            var f_cell_h  = curCells.length;
+            var x0 = curFrame.xmin - curDirection.xmin;
+            var y0 = curFrame.ymin - curDirection.ymin;
+
             var cell = {
                 width: 0,
                 height: 0,
                 data: []
             };
-
-            for (var row = 0; row < f_cell_h; row++) {
-                x0 = this.framebox[direction][frame].xmin - this.directionbox[direction].xmin;
-                cell.height = this.framebox[direction][frame].cells[row][0].h;
+            var curPixelData = pixelData[0];
+            for (var row = 0,pIDX=0; row < f_cell_h; row++) {
+                x0 = curFrame.xmin - curDirection.xmin;
+                const cellHeight = cell.height = curCells[row][0].h;
 
                 var buf_row = Math.trunc(y0 / 4);
-                
+                const curBuffRow = curDirection.cells[buf_row];
+
                 for (var col = 0; col < f_cell_w; col++) {
                     var buf_col = Math.trunc(x0 / 4);
-                    
-                    cell.width = this.framebox[direction][frame].cells[row][col].w;
+                    const curBuffColBuffer = curBuffRow[buf_col];
+
+
+
+
+                    const cellWidth = cell.width = curCells[row][col].w;
                     try {
-                        cell.data = this.create2dArray(cell.height, cell.width);
+                        cell.data = this.create2dArray(cellHeight, cellWidth);
                     } catch(e) {
-                        
-                        console.error(this.file.name, "Invalid Dimensions (x,y): (" + cell.width + "," + cell.height + ")",
-                                        "In [Direction,Frame,Row,Column]:", "[" + direction + "," + frame + "," + row + "," + col + "]", e);
+
+                        console.error(this.file.name, "Invalid Dimensions (x,y): (" + cellWidth + "," + cellHeight + ")",
+                            "In [Direction,Frame,Row,Column]:", "[" + direction + "," + frame + "," + row + "," + col + "]", e);
                     }
-                    
-                    if(this.pixelData.length == 0 || (this.pixelData[0].frame != frame) || ((this.pixelData[0].row != row) || (this.pixelData[0].col != col))) {
+
+                    if(pixelData.length === pIDX || (curPixelData.frame !== frame) || ((curPixelData.row !== row) || (curPixelData.col !== col))) {
                         // this buffer cell have an equalcell bit set to 1
                         // so either copy the frame cell or clear it
-                        if ((cell.width != this.directionbox[direction].cells[buf_row][buf_col].buffer.width) || (cell.height != this.directionbox[direction].cells[buf_row][buf_col].buffer.height)) {
+                        if ((cellWidth !== curBuffColBuffer.width) || (cellHeight !== curBuffColBuffer.height)) {
                             // different sizes
                             // Do nothing.. all transparent pixels
                             this.clear_to_color(cell,0);
                         } else {
                             // same sizes
                             // copy the old frame cell into its new position
-                            this.blit(this.directionbox[direction].cells[buf_row][buf_col].buffer, cell, 0, 0, 0, 0, cell.width, cell.height);
+                            this.blit(curBuffColBuffer, cell, 0, 0, 0, 0, cellWidth, cellHeight);
                             // copy it again, into the final frame bitmap
-                            this.blit(cell, this.spriteData[direction][frame], 0, 0, x0, y0, cell.width, cell.height);
+                            this.blit(cell, this.spriteData[direction][frame], 0, 0, x0, y0, cellWidth, cellHeight);
                         }
                     } else {
                         // fill the frame cell with pixels
-                        if (this.pixelData[0].val[0] == this.pixelData[0].val[1]) {
-                           // fill FRAME cell to color val[0]
-                           this.clear_to_color(cell, this.pixelData[0].val[0]);
+                        if (curPixelData.val[0] === curPixelData.val[1]) {
+                            // fill FRAME cell to color val[0]
+                            this.clear_to_color(cell, curPixelData.val[0]);
                         }
                         else
                         {
                             var nb_bit = 0;
-                            if (this.pixelData[0].val[1] == this.pixelData[0].val[2])
+                            if (curPixelData.val[1] === curPixelData.val[2])
                                 nb_bit = 1;
                             else {
                                 nb_bit = 2;
                             }
 
                             // fill FRAME cell with pixels
-                            for (var y = 0; y < cell.height; y++) {
-                                for (var x = 0; x < cell.width; x++) {
+                            const fData = this.file.data,
+                             ptr = this.bitstream[direction][4].ptr;
+                            for (var y = 0; y < cellHeight; y++) {
+                                for (var x = 0; x < cellWidth; x++) {
                                     // PixelCodeAndDisplacement
-                                    var pix = this.readBits(this.file.data, this.bitstream[direction][4].ptr, nb_bit, false);
-                                    this.putpixel(cell, x, y, this.pixelData[0].val[pix]);
+                                    var pix = this.readBits(fData, ptr, nb_bit, false);
+                                    this.putpixel(cell, x, y, curPixelData.val[pix]);
                                 }
                             }
                         }
 
                         // copy the frame cell into the frame bitmap
-                        this.blit(cell, this.spriteData[direction][frame], 0, 0, x0, y0, cell.width, cell.height);
+                        this.blit(cell, this.spriteData[direction][frame], 0, 0, x0, y0, cellWidth, cellHeight);
 
                         // next pixelbuffer entry
-                        this.pixelData.splice(0,1);
+                        curPixelData = pixelData[++pIDX];
                     }
 
                     // for the buffer cell that was used by this frame cell,
                     // save the width & size of the current frame cell
                     // (needed for further tests about equalcell)
-                    this.directionbox[direction].cells[buf_row][buf_col].buffer.width = cell.width;
-                    this.directionbox[direction].cells[buf_row][buf_col].buffer.height = cell.height;
-                    this.directionbox[direction].cells[buf_row][buf_col].buffer.data = this.create2dArray(cell.height, cell.width);
-                    this.blit(cell, this.directionbox[direction].cells[buf_row][buf_col].buffer, 0, 0, 0, 0, cell.width, cell.height);
-                    //Object.assign(this.directionbox[direction].cells[buf_row][buf_col].buffer, cell);
-                    
-                    x0 += cell.width;
+                    curBuffColBuffer.width = cellWidth;
+                    curBuffColBuffer.height = cellHeight;
+                    curBuffColBuffer.data = this.create2dArray(cellHeight, cellWidth);
+                    this.blit(cell, curBuffColBuffer, 0, 0, 0, 0, cellWidth, cellHeight);
+                    //Object.assign(curBuffColBuffer, cell);
+
+                    x0 += cellWidth;
                 }
-                
+
                 y0 += cell.height;
-            }    
+            }
+            
+            this.pixelData.splice(0, pIDX);
         },
         
         selectComposition: function(e) {
