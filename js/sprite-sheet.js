@@ -188,20 +188,29 @@ Vue.component('sprite-sheet', {
                 
                 
                 this.directions.length = 0;
-                
-                for (let row = 0; row < this.fileheader[4]; row++) {
-                    var canvas = document.createElement('canvas');
-                    canvas.width = maxFramewidth * this.fileheader[5];
-                    canvas.height = maxFrameheight;
+				let total_width = maxFramewidth * this.fileheader[5];
+				
+				if(this.fileheader[4] === 1 && total_width > 8192) {
+					
+					let row_frame_count = Math.floor(8192 / maxFramewidth);
+					let divisor = maxFramewidth * row_frame_count;
+					let rows = Math.floor(total_width / divisor); // IE :x
+					let rest = total_width % divisor;
+					
+					var canvas = document.createElement('canvas');
+					canvas.width = divisor;
+					canvas.height = (rows + 1) * maxFrameheight;
+					
                     var graphics = canvas.getContext('2d');
-                    
-                    var frames_cnt = this.fileheader[5];
-                    
-                    for (var col = 0; col < frames_cnt; col++) {
-                        graphics.drawImage(imageData[row][col], col * maxFramewidth, 0);
-                    }
-                    
-                    this.directions.push({
+					
+					for(var row = 0; row < rows; row++) {
+						for (var col = 0; col < row_frame_count; col++) {
+							if(!imageData[0][row * row_frame_count + col]) break;
+							graphics.drawImage(imageData[0][row * row_frame_count + col], col * maxFramewidth, row * maxFrameheight);
+						}
+					}
+					
+					this.directions.push({
                         image: {
                             src: canvas.toDataURL(),
                             style: {
@@ -210,7 +219,32 @@ Vue.component('sprite-sheet', {
                             id: "png_" + row
                         }
                     });
-                }
+				} else {
+					for (let row = 0; row < this.fileheader[4]; row++) {
+						
+						
+						var canvas = document.createElement('canvas');
+						canvas.width = maxFramewidth * this.fileheader[5];
+						canvas.height = maxFrameheight;
+						var graphics = canvas.getContext('2d');
+						
+						var frames_cnt = this.fileheader[5];
+						
+						for (var col = 0; col < frames_cnt; col++) {
+							graphics.drawImage(imageData[row][col], col * maxFramewidth, 0);
+						}
+						
+						this.directions.push({
+							image: {
+								src: canvas.toDataURL(),
+								style: {
+									'max-width': windowWidth + "px"
+								},
+								id: "png_" + row
+							}
+						});
+					}
+				}
                 
                 //this.file.image = /*"<img src:'" + */canvas.toDataURL()/* + "'>"*/;
                 //this.$refs[this.file.name].src = this.file.image;
